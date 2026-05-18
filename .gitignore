@@ -1,0 +1,10 @@
+venv/
+env/
+data/datapkn/
+baseline/
+__pycache__/
+*.pyc
+*.dll
+*.pt
+*.bin
+*.cache
