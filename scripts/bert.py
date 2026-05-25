@@ -1,29 +1,35 @@
-import os
 import torch
 import numpy as np
 from transformers import AutoTokenizer, AutoModel
 from scripts.config import MODEL_NAME, BATCH_SIZE, MAX_LENGTH as MAX_LEN, device
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-bert_model = AutoModel.from_pretrained(MODEL_NAME)
+tokenizer = None
+bert_model = None
 
-bert_model = torch.quantization.quantize_dynamic(
-    bert_model, {torch.nn.Linear}, dtype=torch.qint8
-)
+def load_model():
+    global tokenizer, bert_model
+    if tokenizer is None or bert_model is None:
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        model = AutoModel.from_pretrained(MODEL_NAME)
+        model = torch.quantization.quantize_dynamic(
+            model, {torch.nn.Linear}, dtype=torch.qint8
+        )
+        model.to(device)
+        model.eval()
+        bert_model = model
+    return tokenizer, bert_model
 
-bert_model.to(device)
-bert_model.eval()
 
-def get_bert_embeddings(questions, answers):
+def get_bert_embeddings(texts):
+    global tokenizer, bert_model
+    tokenizer, bert_model = load_model()
     embeddings = []
-    
-    for i in range(0, len(questions), BATCH_SIZE):
-        q_batch = list(questions[i:i + BATCH_SIZE])
-        a_batch = list(answers[i:i + BATCH_SIZE])
+
+    for i in range(0, len(texts), BATCH_SIZE):
+        batch = texts[i:i + BATCH_SIZE]
 
         inputs = tokenizer(
-            q_batch,
-            a_batch,
+            batch,
             padding=True,
             truncation=True,
             max_length=MAX_LEN,
@@ -36,6 +42,8 @@ def get_bert_embeddings(questions, answers):
             outputs = bert_model(**inputs)
             token_embeddings = outputs.last_hidden_state
             mask = inputs["attention_mask"].unsqueeze(-1)
-            emb = (token_embeddings * mask).sum(1) / mask.sum(1)
+            denom = mask.sum(1).clamp(min=1e-9)
+            emb = (token_embeddings * mask).sum(1) / denom
         embeddings.append(emb.cpu().numpy())
+
     return np.vstack(embeddings)

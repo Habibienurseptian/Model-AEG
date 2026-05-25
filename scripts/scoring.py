@@ -9,12 +9,20 @@ from scripts.lf import extract_linguistic_features
 class BertSemanticSearch:
     def __init__(self, corpus):
         self.corpus = corpus
-        self.corpus_embeddings = get_bert_embeddings(corpus, corpus)
+        self.corpus_embeddings = get_bert_embeddings(corpus)
 
-    def search(self, question, top_k=5):
-        question_emb= get_bert_embeddings([question], [question])[0].reshape(1, -1)
-        scores = cosine_similarity(question_emb, self.corpus_embeddings)[0]
+    def search(self, reference, top_k=5):
+        reference_emb = get_bert_embeddings(
+            [reference].reshape(1, -1),
+        )[0]
+
+        scores = cosine_similarity(
+            reference_emb,
+            self.corpus_embeddings
+        )[0]
+
         top_idx = np.argsort(scores)[::-1][:top_k]
+
         return [
             {
                 "text": self.corpus[i],
@@ -24,7 +32,7 @@ class BertSemanticSearch:
         ]
 
 
-def compute_score(answer, question, bert_model, ling_model):
+def compute_score(answer, reference, bert_model, ling_model):
 
     if not answer or normalize_text(answer) == "":
         return {
@@ -36,9 +44,13 @@ def compute_score(answer, question, bert_model, ling_model):
         }
 
     # BERT Embedding
-    question_emb = get_bert_embeddings([question], [question])
-    answer_emb = get_bert_embeddings([answer], [answer])
-    semantic_score = cosine_similarity(question_emb.reshape(1, -1), answer_emb.reshape(1, -1))[0][0] * 100
+    reference_emb = get_bert_embeddings([reference])
+    answer_emb = get_bert_embeddings([answer])
+
+    semantic_score = cosine_similarity(
+        reference_emb.reshape(1, -1),
+        answer_emb.reshape(1, -1)
+    )[0][0] * 100
 
     # Linguistic features
     ling_features = extract_linguistic_features([answer])

@@ -1,15 +1,20 @@
-from urllib import request
-from urllib.request import Request
-
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from scripts.schemas import Essay
 from scripts.scoring import compute_score
 from scripts.model_loader import load_models
-from scripts.trainer import train_model
 
 app = FastAPI(
     title="Essay Scoring"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -27,23 +32,7 @@ def score_essay(essay: Essay, request: Request):
 
     return compute_score(
         essay.answer,
-        essay.question,
+        essay.reference,
         bert_model,
         ling_model
     )
-
-
-@app.post("/retrain")
-def retrain():
-
-    ok = train_model()
-
-    if ok:
-        bert_model, ling_model = load_models()
-
-        app.state.bert_model = bert_model
-        app.state.ling_model = ling_model
-
-    return {
-        "status": ok
-    }
